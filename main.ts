@@ -29,7 +29,7 @@ export default class WeeklyReview extends Plugin {
 				new Notice(`Opening ${recentFiles.length} files created in the last ${this.settings.daysAgo} days.`);
 
 				recentFiles.forEach((f) => {
-					let leaf = app.workspace.createLeafInTabGroup();
+					let leaf = app.workspace.getLeaf('tab');
 					leaf.openFile(f)
 				})
 			}

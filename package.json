@@ -1,6 +1,6 @@
 {
 	"name": "weekly-review",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "This is opens all of the files you have created in the last week in Obsidian.",
 	"main": "main.js",
 	"scripts": {
