@@ -3,7 +3,7 @@
 	"name": "Weekly Review",
 	"version": "1.0.1",
 	"minAppVersion": "0.15.0",
-	"description": "This is opens all of the files you have created in the last week.",
+	"description": "This opens all of the files you have created in the last week to support easy Weekly Reviews.",
 	"author": "Brandon Boswell",
 	"authorUrl": "https://brandonkboswell.com",
 	"isDesktopOnly": false
