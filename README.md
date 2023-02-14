@@ -9,7 +9,7 @@ My weekly review process consists of reviewing all of the files that I created t
 https://youtu.be/U2MLHcaCbl4
 
 ## Installation
-This plugin is now available directly within Obsidina. If for some reason you need to manually install it, you can follow the instructions in the video below:
+This plugin is now available directly within Obsidian. If for some reason you need to manually install it, you can follow the instructions in the video below:
 
 [![How to Manually Install an Obsidian Plugin](https://img.youtube.com/vi/ffGfVBLDI_0/0.jpg)](https://www.youtube.com/watch?v=ffGfVBLDI_0)
 
