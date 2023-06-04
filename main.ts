@@ -24,7 +24,7 @@ export default class WeeklyReview extends Plugin {
 				const files = this.app.vault.getMarkdownFiles();
 
 				let start = moment(moment().startOf('day')).subtract(this.settings.daysAgo, "days");
-				let recentFiles = files.filter(f => start.isBefore(moment(f.stat.ctime)));
+				let recentFiles = files.filter(f => start.isBefore(moment(f.stat.ctime))).sort((a, b) => b?.stat.ctime - a?.stat.ctime);
 
 				new Notice(`Opening ${recentFiles.length} files created in the last ${this.settings.daysAgo} days.`);
 
