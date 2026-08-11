@@ -1,4 +1,4 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, TFile } from 'obsidian';
+import { App, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
 import type moment from "moment";
 
 declare global {
@@ -21,7 +21,7 @@ interface WeeklyReviewSettings {
 	daysAgo: number;
 	mode: Mode;
 	location: Location;
-	lastReview: Date | null;
+	lastReview: string | null;
 }
 
 const DEFAULT_SETTINGS: WeeklyReviewSettings = {
@@ -35,60 +35,67 @@ export default class WeeklyReview extends Plugin {
 	settings: WeeklyReviewSettings;
 
   async startReview(lookbackInDays:number, mode:Mode, location:Location) {
-    const files = this.app.vault.getMarkdownFiles();
+		// A cleared settings box can persist NaN, which makes every
+		// comparison below false and silently opens nothing.
+		const days = Number.isFinite(lookbackInDays) && lookbackInDays >= 1
+			? Math.floor(lookbackInDays)
+			: DEFAULT_SETTINGS.daysAgo;
 
-    const start = window.moment(window.moment().startOf('day')).subtract(lookbackInDays, "days");
-    const recentFiles = files.filter(f => start.isBefore(window.moment(f.stat[mode]))).sort((a, b) => b?.stat[mode] - a?.stat[mode]);
+    const start = window.moment().startOf('day').subtract(days, "days");
+    const recentFiles = this.app.vault.getMarkdownFiles()
+			.filter(f => start.isBefore(window.moment(f.stat[mode])))
+			.sort((a, b) => b.stat[mode] - a.stat[mode]);
 
 		// if the mode is ctime, say created
 		// otherwise say modified
 		const modeString = mode === Mode.CTime ? 'created' : 'modified';
 
-    new Notice(`Opening ${recentFiles.length} files ${modeString} in the last ${lookbackInDays} days.`);
-		let index = 0;
-		let split: WorkspaceLeaf | null = null;
-		if (location === Location.Split) {
-			split = await this.app.workspace.getLeaf('split')
+    new Notice(`Opening ${recentFiles.length} files ${modeString} in the last ${days} days.`);
+
+		const splitLeaf = location === Location.Split
+			? this.app.workspace.getLeaf('split')
+			: null;
+
+		// getLeaf('split') does not activate the new leaf, and getLeaf('tab')
+		// picks its tab group from the most recently active leaf. Without this
+		// every file after the first would open back in the original group.
+		if (splitLeaf) {
+			this.app.workspace.setActiveLeaf(splitLeaf, { focus: false });
 		}
 
-		await recentFiles.forEach(async (f) => {
-			await setTimeout(async () => {
-				console.log(`Opening ${f.path}`, split, location)
+		// Open one file at a time. Obsidian reuses a tab whose view is still
+		// the empty "New tab" page, so firing these off concurrently makes
+		// every file land in the same leaf and clobber the previous one.
+		let failures = 0;
+		for (let i = 0; i < recentFiles.length; i++) {
+			// Re-resolve the path: the snapshot above goes stale if a sync
+			// deletes or renames a file while the review is running.
+			const file = this.app.vault.getAbstractFileByPath(recentFiles[i].path);
+			if (!(file instanceof TFile)) continue;
 
-				// If this is the first file and we are splitting
-				// open it in the split
-				if (index === 0 && split) {
-					await this.openFile(split, f)
-				} else {
-					await this.openFile(null, f)
-				}
+			try {
+				const leaf = (i === 0 && splitLeaf)
+					? splitLeaf
+					: this.app.workspace.getLeaf('tab');
+				await leaf.openFile(file, { active: false });
+			} catch (e) {
+				failures++;
+				console.error(`Weekly Review: failed to open ${file.path}`, e);
+			}
+		}
 
-				index++;
-			})
-		})
+		// Let Obsidian know the split is the tab group we want to be active.
+		if (splitLeaf) {
+			this.app.workspace.setActiveLeaf(splitLeaf, { focus: true });
+		}
 
-		this.settings.lastReview = new Date();
+		if (failures) {
+			new Notice(`Weekly Review: ${failures} file(s) could not be opened.`);
+		}
+
+		this.settings.lastReview = new Date().toISOString();
 		await this.saveSettings();
-		console.log('Weekly Review Done!')
   }
-
-	async openFile(existingLeaf: WorkspaceLeaf | null, file: TFile) {
-		let leaf = existingLeaf;
-		if (!leaf) {
-			leaf = await this.app.workspace.getLeaf('tab')
-		}
-
-		const r = await leaf.openFile(file, { active: false })
-
-		// If we are putting this in a new split, 
-		// let's make sure Obsidian knows this 
-		// is the tab group we want to be active
-		if (existingLeaf) {
-			await this.app.workspace.setActiveLeaf(leaf)
-		}
-
-		return r;
-	}
 
   async onload() {
 		await this.loadSettings();
@@ -133,7 +140,10 @@ class WeeklyReviewSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		containerEl.createEl('h2', {text: 'Settings for Weekly Review'});
-		containerEl.createEl('h3', {text: 'Last Review was on: ' + window.moment(this.plugin.settings.lastReview).format('MMMM Do, YYYY h:mma') || 'Never'});
+		const lastReview = this.plugin.settings.lastReview;
+		containerEl.createEl('h3', {text: lastReview
+			? 'Last Review was on: ' + window.moment(lastReview).format('MMMM Do, YYYY h:mma')
+			: 'Last Review was on: Never'});
 
 		new Setting(containerEl)
 			.setName('How many days to show?')
@@ -142,7 +152,11 @@ class WeeklyReviewSettingTab extends PluginSettingTab {
 				.setPlaceholder('Days')
 				.setValue(this.plugin.settings.daysAgo.toString())
 				.onChange(async (value) => {
-					this.plugin.settings.daysAgo = parseInt(value);
+					// Fires on every keystroke — don't persist a half-typed
+					// or empty box as NaN.
+					const parsed = parseInt(value, 10);
+					if (!Number.isFinite(parsed) || parsed < 1) return;
+					this.plugin.settings.daysAgo = parsed;
 					await this.plugin.saveSettings();
 				}));
 
